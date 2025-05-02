@@ -226,7 +226,6 @@ bot.action(/geo_(.+)/, async (ctx) => {
                     inline_keyboard: [
                         [{ text: '✅ Confirm', callback_data: 'confirm_yes' }],
                         [{ text: '✏️ Edit', callback_data: 'confirm_edit' }],
-                        [{ text: '🔄 Restart', callback_data: 'restart' }],
                     ],
                 },
             });
@@ -290,19 +289,6 @@ bot.action('confirm_edit', async (ctx) => {
         console.error('Error in confirm_edit:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Nothing was sent. Please try again with /start.');
-    }
-});
-
-// Обработчик перезапуска
-bot.action('restart', async (ctx) => {
-    try {
-        ctx.session = { step: steps.LANGUAGE };
-        await ctx.answerCbQuery();
-        await ctx.reply(texts.welcome.en, joinButton);
-    } catch (error) {
-        console.error('Error in restart action:', error);
-        ctx.session = { step: steps.LANGUAGE };
-        await ctx.reply('An error occurred. Please try again with /start.');
     }
 });
 
