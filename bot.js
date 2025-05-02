@@ -1,25 +1,21 @@
-require('dotenv').config();
+const functions = require('firebase-functions');
 const { Telegraf, Markup, session } = require('telegraf');
+const admin = require('firebase-admin');
 
 const texts = require('./texts');
 const steps = require('./steps');
 const { trafficOptions, geoOptions } = require('./helpers/data');
 const { generateMultiButtons } = require('./helpers/buttons');
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+// Инициализация Firebase
+admin.initializeApp();
+const db = admin.database();
+
+// Инициализация бота
+const bot = new Telegraf(functions.config().bot.token);
 bot.use(session());
 
-const joinButton = Markup.inlineKeyboard([
-    Markup.button.callback('Join', 'join'),
-]);
-
-const languageButtons = Markup.inlineKeyboard([
-    Markup.button.callback('English', 'lang_en'),
-    Markup.button.callback('Русский', 'lang_ru'),
-    Markup.button.callback('Українська', 'lang_ua'),
-]);
-
-// Функция для экранирования HTML-специальных символов
+// Функция для экранирования HTML
 function escapeHTML(text) {
     if (!text) return '';
     return text.replace(/[&<>"']/g, function(m) {
@@ -33,6 +29,18 @@ function escapeHTML(text) {
     });
 }
 
+// Определение кнопок
+const joinButton = Markup.inlineKeyboard([
+    Markup.button.callback('Join', 'join'),
+]);
+
+const languageButtons = Markup.inlineKeyboard([
+    Markup.button.callback('English', 'lang_en'),
+    Markup.button.callback('Русский', 'lang_ru'),
+    Markup.button.callback('Українська', 'lang_ua'),
+]);
+
+// Обработчики бота
 bot.start(async (ctx) => {
     try {
         console.log('Handling /start command for user:', ctx.from.id);
@@ -153,7 +161,6 @@ bot.action(/geo_(.+)/, async (ctx) => {
             ctx.session.step = steps.CONFIRM;
             const d = ctx.session.data;
 
-            // Экранируем данные для безопасного HTML
             const summary = `
 <b>Contact:</b> ${escapeHTML(d.contact)}
 <b>Company:</b> ${escapeHTML(d.company)}
@@ -161,13 +168,11 @@ bot.action(/geo_(.+)/, async (ctx) => {
 <b>GEOs:</b> ${escapeHTML(d.geo.join(', '))}
             `;
 
-            // Проверяем длину сообщения
             if (summary.length > 4096) {
                 await ctx.reply('Your data is too long. Please shorten it and try again.');
                 return;
             }
 
-            // Формируем клавиатуру
             const confirmKeyboard = {
                 inline_keyboard: [
                     [{ text: '✅ Confirm', callback_data: 'confirm_yes' }],
@@ -175,7 +180,6 @@ bot.action(/geo_(.+)/, async (ctx) => {
                 ],
             };
 
-            // Логируем параметры отправки
             console.log('Sending confirm message with keyboard:', JSON.stringify({
                 text: `${texts.confirm[lang]}\n\n${summary}`,
                 parse_mode: 'HTML',
@@ -210,10 +214,21 @@ bot.action('confirm_yes', async (ctx) => {
     try {
         const lang = ctx.session.lang || 'en';
         ctx.session.step = steps.DONE;
+
+        // Сохранение в Firebase
+        const ref = db.ref('partners');
+        const newData = {
+            contact: ctx.session.data.contact || 'N/A',
+            company: ctx.session.data.company || 'N/A',
+            traffic: ctx.session.data.traffic.length ? ctx.session.data.traffic.join(', ') : 'N/A',
+            geo: ctx.session.data.geo.length ? ctx.session.data.geo.join(', ') : 'N/A',
+            timestamp: new Date().toISOString()
+        };
+        const newRef = await ref.push(newData);
+        console.log('Data saved to Firebase:', newData, 'Key:', newRef.key);
+
         await ctx.answerCbQuery();
-        await ctx.reply(texts.thankYou[lang], {
-            parse_mode: 'Markdown',
-        });
+        await ctx.reply(texts.thankYou[lang], { parse_mode: 'Markdown' });
         await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
     } catch (error) {
         console.error('Error in confirm_yes:', error);
@@ -246,9 +261,13 @@ bot.action('restart', async (ctx) => {
     }
 });
 
-bot.launch()
-    .then(() => console.log('Bot started successfully'))
-    .catch((error) => console.error('Failed to start bot:', error));
-
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Экспорт функции для Cloud Functions
+exports.bot = functions.https.onRequest(async (req, res) => {
+    try {
+        await bot.handleUpdate(req.body);
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('Error handling update:', error);
+        res.status(500).send('Error');
+    }
+});
