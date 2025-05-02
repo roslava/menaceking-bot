@@ -81,7 +81,7 @@ bot.action(/^lang_(.+)$/, async (ctx) => {
         ctx.session.lang = lang;
         ctx.session.step = steps.CONTACT;
         await ctx.answerCbQuery();
-        await ctx.editMessageText(texts.enterContact[lang]);
+        await ctx.editMessageText(texts.shareContact[lang]);
     } catch (error) {
         console.error('Error in language selection:', error);
         await ctx.reply('An error occurred. Please try again with /start.');
