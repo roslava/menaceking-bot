@@ -211,15 +211,9 @@ bot.action('confirm_yes', async (ctx) => {
         const lang = ctx.session.lang || 'en';
         ctx.session.step = steps.DONE;
         await ctx.answerCbQuery();
-        await ctx.reply(
-            `${texts.thankYou[lang]}\n\nWant to start over?`,
-            {
-                parse_mode: 'HTML',
-                reply_markup: Markup.inlineKeyboard([
-                    Markup.button.callback('🔄 Start Over', 'restart'),
-                ]),
-            }
-        );
+        await ctx.reply(texts.thankYou[lang], {
+            parse_mode: 'Markdown',
+        });
         await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
     } catch (error) {
         console.error('Error in confirm_yes:', error);
