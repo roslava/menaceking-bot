@@ -132,9 +132,19 @@ bot.on('text', async (ctx) => {
         switch (step) {
             case steps.CONTACT:
                 ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
-                ctx.session.data.contact = text;
-                ctx.session.step = steps.COMPANY;
-                return ctx.reply(texts.companyName[lang]);
+                // Проверяем, есть ли username у пользователя
+                const username = ctx.message.from.username ? `@${ctx.message.from.username}` : null;
+                if (username) {
+                    // Автоматически подставляем username
+                    ctx.session.data.contact = username;
+                    ctx.session.step = steps.COMPANY;
+                    return ctx.reply(texts.companyName[lang]);
+                } else {
+                    // Если username отсутствует, сохраняем введенный текст
+                    ctx.session.data.contact = text;
+                    ctx.session.step = steps.COMPANY;
+                    return ctx.reply(texts.companyName[lang]);
+                }
 
             case steps.COMPANY:
                 ctx.session.data.company = text;
