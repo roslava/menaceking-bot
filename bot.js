@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const LocalSession = require('telegraf-session-local');
+const express = require('express');
 const texts = require('./texts');
 const steps = require('./steps');
 const { trafficOptions, geoOptions } = require('./helpers/data');
@@ -14,8 +15,6 @@ const session = new LocalSession({
     database: 'sessions.json',
     storage: LocalSession.storageFileSync,
 });
-session.DB.on('connect', () => console.log('Local session storage initialized'));
-session.DB.on('error', (err) => console.error('Local session storage error:', err));
 bot.use(session.middleware());
 
 // Логирование сессий
@@ -24,6 +23,11 @@ bot.use(async (ctx, next) => {
     await next();
     console.log('Session after middleware:', JSON.stringify(ctx.session));
 });
+
+// Инициализация Express
+const app = express();
+app.use(express.json());
+app.use(bot.webhookCallback('/bot'));
 
 // Функция для экранирования HTML
 function escapeHTML(text) {
@@ -302,11 +306,11 @@ bot.action('restart', async (ctx) => {
     }
 });
 
-// Запуск бота с поллингом
-bot.launch()
-    .then(() => console.log('Bot started successfully'))
-    .catch((error) => console.error('Failed to start bot:', error));
-
-// Обработка сигналов для graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// Запуск HTTP-сервера
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}/bot`).then(() => {
+        console.log('Webhook set');
+    }).catch((err) => console.error('Failed to set webhook:', err));
+});
