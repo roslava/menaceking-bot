@@ -20,8 +20,8 @@ async function saveToFirebase(data) {
         const newData = {
             contact: data.contact || 'N/A',
             company: data.company || 'N/A',
-            traffic: data.traffic.length ? data.traffic.join(', ') : 'N/A',
-            geo: data.geo.length ? data.geo.join(', ') : 'N/A',
+            traffic: data.traffic || 'N/A', // Принимаем как строку
+            geo: data.geo || 'N/A', // Принимаем как строку
             timestamp: new Date().toISOString()
         };
 
