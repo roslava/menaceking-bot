@@ -2,6 +2,7 @@
   "name": "menaceking-bot",
   "version": "1.0.0",
   "main": "bot.js",
+  "license": "MIT",
   "scripts": {
     "start": "node bot.js"
   },
