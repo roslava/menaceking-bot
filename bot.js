@@ -106,10 +106,45 @@ bot.action(/lang_(.+)/, async (ctx) => {
         ctx.session.lang = lang;
         ctx.session.step = steps.CONTACT;
         ctx.session.data = { traffic: [], geo: [] };
+
+        // Получаем Telegram-ник пользователя
+        const username = ctx.from.username ? `@${ctx.from.username}` : null;
+
+        // Формируем сообщение и клавиатуру
+        const contactMessage = texts.shareContact[lang];
+        const keyboard = username
+            ? Markup.inlineKeyboard([
+                Markup.button.callback(`Send ${username}`, 'send_username'),
+            ])
+            : null;
+
         await ctx.answerCbQuery();
-        await ctx.editMessageText(texts.shareContact[lang]);
+        await ctx.editMessageText(contactMessage, { parse_mode: 'HTML', ...keyboard });
     } catch (error) {
         console.error('Error in lang action:', error);
+        ctx.session = { step: steps.LANGUAGE };
+        await ctx.reply('An error occurred. Please try again with /start.');
+    }
+});
+
+// Обработчик кнопки "Send username"
+bot.action('send_username', async (ctx) => {
+    try {
+        const lang = ctx.session.lang || 'en';
+        const username = ctx.from.username ? `@${ctx.from.username}` : null;
+        if (!username) {
+            await ctx.answerCbQuery('No username available. Please enter your contact manually.');
+            return;
+        }
+        ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
+        ctx.session.data.contact = username;
+        ctx.session.step = steps.COMPANY;
+        await ctx.answerCbQuery();
+        await ctx.reply(username); // Отправляем ник в чат для имитации ввода
+        await ctx.reply(texts.companyName[lang]); // Переходим к следующему шагу
+        await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
+    } catch (error) {
+        console.error('Error in send_username:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
@@ -132,19 +167,9 @@ bot.on('text', async (ctx) => {
         switch (step) {
             case steps.CONTACT:
                 ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
-                // Проверяем, есть ли username у пользователя
-                const username = ctx.message.from.username ? `@${ctx.message.from.username}` : null;
-                if (username) {
-                    // Автоматически подставляем username
-                    ctx.session.data.contact = username;
-                    ctx.session.step = steps.COMPANY;
-                    return ctx.reply(texts.companyName[lang]);
-                } else {
-                    // Если username отсутствует, сохраняем введенный текст
-                    ctx.session.data.contact = text;
-                    ctx.session.step = steps.COMPANY;
-                    return ctx.reply(texts.companyName[lang]);
-                }
+                ctx.session.data.contact = text;
+                ctx.session.step = steps.COMPANY;
+                return ctx.reply(texts.companyName[lang]);
 
             case steps.COMPANY:
                 ctx.session.data.company = text;
