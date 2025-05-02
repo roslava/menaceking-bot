@@ -27,4 +27,4 @@ pids/
 *.pid
 *.seed
 *.pid.lock
-.functions
+sessions.json
