@@ -1,0 +1,29 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.env
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code / JetBrains IDEs
+.vscode/
+.idea/
+
+# Output
+dist/
+build/
+
+# Optional: if you're using PM2 or similar
+pids/
+*.pid
+*.seed
+*.pid.lock
