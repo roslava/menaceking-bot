@@ -6,7 +6,7 @@ const texts = require('./texts');
 const steps = require('./steps');
 const { trafficOptions, geoOptions } = require('./helpers/data');
 const { generateMultiButtons } = require('./helpers/buttons');
-const { savePartner } = require('./firebase');
+const { saveToFirebase } = require('./firebase');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -264,7 +264,7 @@ bot.action('confirm_yes', async (ctx) => {
             geo: ctx.session.data.geo.length ? ctx.session.data.geo.join(', ') : 'N/A',
             timestamp: new Date().toISOString(),
         };
-        await savePartner(newData);
+        await saveToFirebase(newData);
         console.log('Data saved to Firebase:', newData);
         await ctx.answerCbQuery();
         await ctx.reply(texts.thankYou[lang], { parse_mode: 'Markdown' });
