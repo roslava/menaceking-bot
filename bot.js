@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
-const express = require('express');
 const LocalSession = require('telegraf-session-local');
 const texts = require('./texts');
 const steps = require('./steps');
@@ -12,9 +11,11 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Настройка локального хранилища сессий
 const session = new LocalSession({
-    database: 'sessions.json', // Файл для хранения сессий
-    storage: LocalSession.storageFileSync, // Синхронное чтение/запись
+    database: 'sessions.json',
+    storage: LocalSession.storageFileSync,
 });
+session.DB.on('connect', () => console.log('Local session storage initialized'));
+session.DB.on('error', (err) => console.error('Local session storage error:', err));
 bot.use(session.middleware());
 
 // Логирование сессий
@@ -23,10 +24,6 @@ bot.use(async (ctx, next) => {
     await next();
     console.log('Session after middleware:', JSON.stringify(ctx.session));
 });
-
-const app = express();
-app.use(express.json());
-app.use(bot.webhookCallback('/bot'));
 
 // Функция для экранирования HTML
 function escapeHTML(text) {
@@ -57,7 +54,7 @@ const languageButtons = Markup.inlineKeyboard([
 bot.start(async (ctx) => {
     try {
         console.log('Handling /start command for user:', ctx.from.id);
-        ctx.session = { step: steps.LANGUAGE }; // Сбрасываем сессию
+        ctx.session = { step: steps.LANGUAGE };
         await ctx.reply(texts.welcome.en, joinButton);
         console.log('Sent welcome message');
     } catch (error) {
@@ -66,8 +63,36 @@ bot.start(async (ctx) => {
     }
 });
 
+// Обработчик /reset
+bot.command('reset', async (ctx) => {
+    try {
+        console.log('Handling /reset command for user:', ctx.from.id);
+        ctx.session = { step: steps.LANGUAGE };
+        await ctx.reply('Session reset. Start over with /start.');
+        console.log('Sent reset confirmation');
+    } catch (error) {
+        console.error('Error in reset command:', error);
+        await ctx.reply('An error occurred. Please try again with /start.');
+    }
+});
+
+// Обработчик Join
+bot.action('join', async (ctx) => {
+    try {
+        console.log('Handling join action for user:', ctx.from.id, 'Session:', JSON.stringify(ctx.session));
+        ctx.session.step = steps.LANGUAGE;
+        await ctx.answerCbQuery();
+        await ctx.editMessageText(texts.chooseLanguage.en, languageButtons);
+        console.log('Updated session after join:', JSON.stringify(ctx.session));
+    } catch (error) {
+        console.error('Error in join action:', error);
+        ctx.session = { step: steps.LANGUAGE };
+        await ctx.reply('An error occurred. Please try again with /start.');
+    }
+});
+
 // Обработчик выбора языка
-bot.action(/^lang_(.+)$/, async (ctx) => {
+bot.action(/lang_(.+)/, async (ctx) => {
     try {
         const lang = ctx.match[1];
         const validLanguages = ['en', 'ru', 'ua'];
@@ -80,7 +105,7 @@ bot.action(/^lang_(.+)$/, async (ctx) => {
         await ctx.answerCbQuery();
         await ctx.editMessageText(texts.shareContact[lang]);
     } catch (error) {
-        console.error('Error in language selection:', error);
+        console.error('Error in lang action:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
@@ -90,122 +115,134 @@ bot.action(/^lang_(.+)$/, async (ctx) => {
 bot.on('text', async (ctx) => {
     try {
         console.log('Received text:', ctx.message.text, 'Lang:', ctx.session.lang, 'Step:', ctx.session.step);
+        const step = ctx.session.step;
         const validLanguages = ['en', 'ru', 'ua'];
         const lang = ctx.session.lang && validLanguages.includes(ctx.session.lang) ? ctx.session.lang : 'en';
         const text = escapeHTML(ctx.message.text);
 
-        if (!ctx.session.step) {
+        if (!step) {
             ctx.session = { step: steps.LANGUAGE };
-            return ctx.reply('Please start with /start.');
+            return ctx.reply('Please press /start to begin.');
         }
 
-        if (ctx.session.step === steps.CONTACT) {
-            ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
-            ctx.session.data.contact = text;
-            ctx.session.step = steps.COMPANY;
-            await ctx.reply(texts.companyName[lang]);
-        } else if (ctx.session.step === steps.COMPANY) {
-            ctx.session.data.company = text;
-            ctx.session.step = steps.TRAFFIC;
-            await ctx.reply(
-                texts.trafficSource[lang],
-                generateMultiButtons(trafficOptions, ctx.session.data.traffic, 'traffic')
-            );
-        } else {
-            await ctx.reply('Please use the buttons or start over with /start.');
+        switch (step) {
+            case steps.CONTACT:
+                ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
+                ctx.session.data.contact = text;
+                ctx.session.step = steps.COMPANY;
+                return ctx.reply(texts.companyName[lang]);
+
+            case steps.COMPANY:
+                ctx.session.data.company = text;
+                ctx.session.step = steps.TRAFFIC;
+                return ctx.reply(
+                    texts.trafficSource[lang],
+                    generateMultiButtons(trafficOptions, ctx.session.data.traffic, 'traffic')
+                );
+
+            case steps.TRAFFIC:
+            case steps.GEO:
+            case steps.CONFIRM:
+                return ctx.reply('Please use the buttons or start over with /start.');
         }
     } catch (error) {
         console.error('Error in text handler:', error);
-        ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
 });
 
 // Обработчик выбора источников трафика
-bot.action(/^traffic_(.+)$/, async (ctx) => {
+bot.action(/traffic_(.+)/, async (ctx) => {
     try {
+        const payload = ctx.match[1];
         const lang = ctx.session.lang || 'en';
-        const selectedTraffic = ctx.match[1];
         ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
 
-        if (selectedTraffic === 'done') {
+        if (ctx.session.step !== steps.TRAFFIC) return ctx.answerCbQuery();
+
+        if (payload === 'done') {
             if (!ctx.session.data.traffic.length) {
-                await ctx.answerCbQuery('Please select at least one traffic type.');
-                return;
+                return ctx.answerCbQuery('Please select at least one traffic type.');
             }
             ctx.session.step = steps.GEO;
-            await ctx.editMessageText(
+            return ctx.editMessageText(
                 texts.geo[lang],
                 generateMultiButtons(geoOptions, ctx.session.data.geo, 'geo')
             );
-        } else if (selectedTraffic === 'clear') {
-            ctx.session.data.traffic = [];
-            await ctx.editMessageReplyMarkup(
-                generateMultiButtons(trafficOptions, ctx.session.data.traffic, 'traffic').reply_markup
-            );
-        } else {
-            if (!ctx.session.data.traffic.includes(selectedTraffic)) {
-                ctx.session.data.traffic.push(selectedTraffic);
-            } else {
-                ctx.session.data.traffic = ctx.session.data.traffic.filter(
-                    (t) => t !== selectedTraffic
-                );
-            }
-            await ctx.editMessageReplyMarkup(
-                generateMultiButtons(trafficOptions, ctx.session.data.traffic, 'traffic').reply_markup
-            );
         }
+
+        const label = trafficOptions.find(opt => opt.replace(/\s+/g, '_').toLowerCase() === payload);
+        if (!label) return ctx.answerCbQuery();
+
+        const arr = ctx.session.data.traffic;
+        const index = arr.indexOf(label);
+        index === -1 ? arr.push(label) : arr.splice(index, 1);
+
         await ctx.answerCbQuery();
+        await ctx.editMessageReplyMarkup(
+            generateMultiButtons(trafficOptions, arr, 'traffic').reply_markup
+        );
     } catch (error) {
-        console.error('Error in traffic selection:', error);
+        console.error('Error in traffic action:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
 });
 
 // Обработчик выбора гео
-bot.action(/^geo_(.+)$/, async (ctx) => {
+bot.action(/geo_(.+)/, async (ctx) => {
     try {
+        const payload = ctx.match[1];
         const lang = ctx.session.lang || 'en';
-        const selectedGeo = ctx.match[1];
         ctx.session.data = ctx.session.data || { traffic: [], geo: [] };
 
-        if (selectedGeo === 'done') {
+        if (ctx.session.step !== steps.GEO) return ctx.answerCbQuery();
+
+        if (payload === 'done') {
             if (!ctx.session.data.geo.length) {
-                await ctx.answerCbQuery('Please select at least one GEO.');
-                return;
+                return ctx.answerCbQuery('Please select at least one GEO.');
             }
             ctx.session.step = steps.CONFIRM;
-            await ctx.editMessageText(
-                texts.confirm[lang]
-                    .replace('{contact}', ctx.session.data.contact || 'N/A')
-                    .replace('{company}', ctx.session.data.company || 'N/A')
-                    .replace('{traffic}', ctx.session.data.traffic.join(', ') || 'N/A')
-                    .replace('{geo}', ctx.session.data.geo.join(', ') || 'N/A'),
-                Markup.inlineKeyboard([
-                    Markup.button.callback('✅ Confirm', 'confirm_yes'),
-                    Markup.button.callback('✏️ Edit', 'confirm_edit'),
-                    Markup.button.callback('🔄 Restart', 'restart'),
-                ])
-            );
-        } else if (selectedGeo === 'clear') {
-            ctx.session.data.geo = [];
-            await ctx.editMessageReplyMarkup(
-                generateMultiButtons(geoOptions, ctx.session.data.geo, 'geo').reply_markup
-            );
-        } else {
-            if (!ctx.session.data.geo.includes(selectedGeo)) {
-                ctx.session.data.geo.push(selectedGeo);
-            } else {
-                ctx.session.data.geo = ctx.session.data.traffic.filter((g) => g !== selectedGeo);
+            const d = ctx.session.data;
+            const summary = `
+<b>Contact:</b> ${escapeHTML(d.contact || 'N/A')}
+<b>Company:</b> ${escapeHTML(d.company || 'N/A')}
+<b>Traffic Sources:</b> ${escapeHTML(d.traffic.join(', ') || 'N/A')}
+<b>GEOs:</b> ${escapeHTML(d.geo.join(', ') || 'N/A')}
+            `;
+
+            if (summary.length > 4096) {
+                await ctx.reply('Your data is too long. Please shorten it and try again.');
+                return;
             }
-            await ctx.editMessageReplyMarkup(
-                generateMultiButtons(geoOptions, ctx.session.data.geo, 'geo').reply_markup
-            );
+
+            await ctx.answerCbQuery();
+            await ctx.replyWithHTML(`${texts.confirm[lang]}\n\n${summary}`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '✅ Confirm', callback_data: 'confirm_yes' }],
+                        [{ text: '✏️ Edit', callback_data: 'confirm_edit' }],
+                        [{ text: '🔄 Restart', callback_data: 'restart' }],
+                    ],
+                },
+            });
+            await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
+            return;
         }
+
+        const label = geoOptions.find(opt => opt.replace(/\s+/g, '_').toLowerCase() === payload);
+        if (!label) return ctx.answerCbQuery();
+
+        const arr = ctx.session.data.geo;
+        const index = arr.indexOf(label);
+        index === -1 ? arr.push(label) : arr.splice(index, 1);
+
         await ctx.answerCbQuery();
+        await ctx.editMessageReplyMarkup(
+            generateMultiButtons(geoOptions, arr, 'geo').reply_markup
+        );
     } catch (error) {
-        console.error('Error in geo selection:', error);
+        console.error('Error in geo action:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
@@ -216,7 +253,6 @@ bot.action('confirm_yes', async (ctx) => {
     try {
         const lang = ctx.session.lang || 'en';
         ctx.session.step = steps.DONE;
-
         const newData = {
             contact: ctx.session.data.contact || 'N/A',
             company: ctx.session.data.company || 'N/A',
@@ -226,7 +262,6 @@ bot.action('confirm_yes', async (ctx) => {
         };
         await savePartner(newData);
         console.log('Data saved to Firebase:', newData);
-
         await ctx.answerCbQuery();
         await ctx.reply(texts.thankYou[lang], { parse_mode: 'Markdown' });
         await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
@@ -245,11 +280,12 @@ bot.action('confirm_edit', async (ctx) => {
         ctx.session.step = steps.CONTACT;
         ctx.session.data = { traffic: [], geo: [] };
         await ctx.answerCbQuery();
-        await ctx.editMessageText(texts.shareContact[lang]);
+        await ctx.reply(texts.shareContact[lang], { parse_mode: 'HTML' });
+        await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
     } catch (error) {
         console.error('Error in confirm_edit:', error);
         ctx.session = { step: steps.LANGUAGE };
-        await ctx.reply('An error occurred. Please try again with /start.');
+        await ctx.reply('An error occurred. Nothing was sent. Please try again with /start.');
     }
 });
 
@@ -258,21 +294,19 @@ bot.action('restart', async (ctx) => {
     try {
         ctx.session = { step: steps.LANGUAGE };
         await ctx.answerCbQuery();
-        await ctx.editMessageText(texts.welcome.en, joinButton);
+        await ctx.reply(texts.welcome.en, joinButton);
     } catch (error) {
-        console.error('Error in restart:', error);
+        console.error('Error in restart action:', error);
         ctx.session = { step: steps.LANGUAGE };
         await ctx.reply('An error occurred. Please try again with /start.');
     }
 });
 
-// Запуск сервера
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    bot.telegram.setWebhook(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}/bot`).then(() => {
-        console.log('Webhook set');
-    }).catch(err => {
-        console.error('Failed to set webhook:', err);
-    });
-});
+// Запуск бота с поллингом
+bot.launch()
+    .then(() => console.log('Bot started successfully'))
+    .catch((error) => console.error('Failed to start bot:', error));
+
+// Обработка сигналов для graceful shutdown
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
