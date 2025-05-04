@@ -4,10 +4,14 @@ function handleConfirmation({ bot, texts, steps, saveToFirebase, errorHandler })
             const lang = ctx.session.lang || 'en';
             ctx.session.step = steps.DONE;
             const newData = {
-                contact: ctx.session.data.contact || 'N/A',
-                company: ctx.session.data.company || 'N/A',
-                traffic: ctx.session.data.traffic.length ? ctx.session.data.traffic.join(', ') : 'N/A',
-                geo: ctx.session.data.geo.length ? ctx.session.data.geo.join(', ') : 'N/A',
+                contact: ctx.session.data?.contact || 'N/A',
+                company: ctx.session.data?.company || 'N/A',
+                traffic: (ctx.session.data?.traffic?.length && Array.isArray(ctx.session.data.traffic))
+                    ? ctx.session.data.traffic.join(', ')
+                    : 'N/A',
+                geo: (ctx.session.data?.geo?.length && Array.isArray(ctx.session.data.geo))
+                    ? ctx.session.data.geo.join(', ')
+                    : 'N/A',
                 timestamp: new Date().toISOString(),
             };
             await saveToFirebase(newData);

@@ -12,6 +12,7 @@ function handleSelectionOfTrafficSources({ bot, steps, texts, generateMultiButto
                     return ctx.answerCbQuery('Please select at least one traffic type.');
                 }
                 ctx.session.step = steps.GEO;
+                await ctx.answerCbQuery(); // Добавляем вызов
                 return ctx.editMessageText(
                     texts.geo[lang],
                     generateMultiButtons(geoOptions, ctx.session.data.geo, 'geo')

@@ -1,3 +1,4 @@
+// handlers/geoSelection.js
 function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, generateMultiButtons, errorHandler }) {
     bot.action(/geo_(.+)/, async (ctx) => {
         try {
@@ -18,7 +19,7 @@ function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, gener
 <b>Company:</b> ${htmlEscaping(d.company || 'N/A')}
 <b>Traffic Sources:</b> ${htmlEscaping(d.traffic.join(', ') || 'N/A')}
 <b>GEOs:</b> ${htmlEscaping(d.geo.join(', ') || 'N/A')}
-                `;
+                `.trim();
 
                 if (summary.length > 4096) {
                     await ctx.reply('Your data is too long. Please shorten it and try again.');
@@ -38,7 +39,8 @@ function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, gener
                 return;
             }
 
-            const label = geoOptions.find(opt => opt.replace(/\s+/g, '_').toLowerCase() === payload);
+            // Поиск региона с учётом регистра
+            const label = geoOptions.find(opt => opt.replace(/\s+/g, '_').toLowerCase() === payload.toLowerCase());
             if (!label) return ctx.answerCbQuery();
 
             const arr = ctx.session.data.geo;
