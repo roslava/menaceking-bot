@@ -1,4 +1,3 @@
-// handlers/geoSelection.js
 function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, generateMultiButtons, errorHandler }) {
     bot.action(/geo_(.+)/, async (ctx) => {
         try {
@@ -10,7 +9,7 @@ function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, gener
 
             if (payload === 'done') {
                 if (!ctx.session.data.geo.length) {
-                    return ctx.answerCbQuery('Please select at least one GEO.');
+                    return ctx.answerCbQuery(texts.geoError?.[lang] || 'Please select at least one GEO.');
                 }
                 ctx.session.step = steps.CONFIRM;
                 const d = ctx.session.data;
@@ -22,7 +21,7 @@ function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, gener
                 `.trim();
 
                 if (summary.length > 4096) {
-                    await ctx.reply('Your data is too long. Please shorten it and try again.');
+                    await ctx.reply(texts.summaryTooLong?.[lang] || 'Your data is too long. Please shorten it and try again.');
                     return;
                 }
 
@@ -30,12 +29,12 @@ function handleGeoSelection({ bot, steps, htmlEscaping, texts, geoOptions, gener
                 await ctx.replyWithHTML(`${texts.confirm[lang]}\n\n${summary}`, {
                     reply_markup: {
                         inline_keyboard: [
-                            [{ text: '✅ Confirm', callback_data: 'confirm_yes' }],
-                            [{ text: '✏️ Edit', callback_data: 'confirm_edit' }],
+                            [{ text: texts.confirmButton[lang], callback_data: 'confirm_yes' }],
+                            [{ text: texts.editButton[lang], callback_data: 'confirm_edit' }],
                         ],
                     },
                 });
-                await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
+                await ctx.deleteMessage().catch((err) => console.error('Ошибка удаления сообщения:', err));
                 return;
             }
 

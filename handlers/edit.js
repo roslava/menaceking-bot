@@ -12,15 +12,21 @@ function handleEdit({ bot, steps, texts, Markup, errorHandler }) {
             const contactMessage = texts.shareContact[lang];
             const options = { parse_mode: 'HTML' };
             if (username) {
-                options.reply_markup = Markup.inlineKeyboard([
-                    Markup.button.callback(`Отправить ${username}`, 'send_username'),
-                ]).reply_markup;
+                options.reply_markup = {
+                    inline_keyboard: [
+                        [{
+                            text: texts.sendUsernameButton[lang].replace('{username}', username),
+                            callback_data: 'send_username'
+                        }],
+                    ],
+                };
             }
 
             await ctx.answerCbQuery();
             await ctx.reply(contactMessage, options);
             await ctx.deleteMessage().catch((err) => console.error('Ошибка удаления сообщения:', err));
         } catch (error) {
+            console.error('Ошибка в handleEdit:', error);
             await errorHandler(ctx, error);
         }
     });
