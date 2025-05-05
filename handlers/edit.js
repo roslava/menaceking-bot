@@ -7,20 +7,19 @@ function handleEdit({ bot, steps, texts, Markup, errorHandler }) {
             ctx.session.step = steps.CONTACT;
             ctx.session.data = { traffic: [], geo: [] };
 
-            // Get the user's Telegram nickname
             const username = ctx.from.username ? `@${ctx.from.username}` : null;
 
-            // Generate message and keyboard
             const contactMessage = texts.shareContact[lang];
-            const keyboard = username
-                ? Markup.inlineKeyboard([
-                    Markup.button.callback(`Send ${username}`, 'send_username'),
-                ])
-                : null;
+            const options = { parse_mode: 'HTML' };
+            if (username) {
+                options.reply_markup = Markup.inlineKeyboard([
+                    Markup.button.callback(`Отправить ${username}`, 'send_username'),
+                ]).reply_markup;
+            }
 
             await ctx.answerCbQuery();
-            await ctx.reply(contactMessage, { parse_mode: 'HTML', ...keyboard });
-            await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));
+            await ctx.reply(contactMessage, options);
+            await ctx.deleteMessage().catch((err) => console.error('Ошибка удаления сообщения:', err));
         } catch (error) {
             await errorHandler(ctx, error);
         }

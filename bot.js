@@ -40,6 +40,7 @@ bot.use(session.middleware());
 
 // Initialize Express
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 
 // Apply rate limiting to the webhook endpoint
