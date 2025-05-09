@@ -19,3 +19,7 @@ pids/
 *.pid
 *.seed
 *.pid.lock
+
+firebase.json
+.firebaserc
+pgdata/

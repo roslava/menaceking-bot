@@ -1,0 +1,28 @@
+services:
+  bot:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/botdb
+      - PORT=8080
+    depends_on:
+      - db
+    volumes:
+      - ./sessions.json:/usr/src/app/sessions.json
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=botdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

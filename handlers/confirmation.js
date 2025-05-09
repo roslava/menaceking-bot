@@ -1,7 +1,10 @@
-function handleConfirmation({ bot, texts, steps, saveToFirebase, errorHandler }) {
+const { saveToPostgres } = require('../postgres');
+
+function handleConfirmation({ bot, texts, steps, errorHandler }) {
     bot.action('confirm_yes', async (ctx) => {
         try {
             const lang = ctx.session.lang || 'en';
+            const userId = ctx.from.id;
             ctx.session.step = steps.DONE;
             const newData = {
                 contact: ctx.session.data?.contact || 'N/A',
@@ -14,8 +17,7 @@ function handleConfirmation({ bot, texts, steps, saveToFirebase, errorHandler })
                     : 'N/A',
                 timestamp: new Date().toISOString(),
             };
-            await saveToFirebase(newData);
-            console.log('Data saved to Firebase:', newData);
+            await saveToPostgres(userId, newData);
             await ctx.answerCbQuery();
             await ctx.reply(texts.thankYou[lang], { parse_mode: 'Markdown' });
             await ctx.deleteMessage().catch((err) => console.error('Error deleting message:', err));

@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const { saveToPostgres } = require('./postgres');
 const { Telegraf, Markup } = require('telegraf');
 const LocalSession = require('telegraf-session-local');
 const express = require('express');
@@ -17,7 +18,6 @@ const handleEdit = require('./handlers/edit');
 const startServer = require('./api/server');
 const {generateMultiButtons} = require("./helpers/buttons");
 const htmlEscaping = require("./utils/html_escaping");
-const {saveToFirebase} = require("./firebase");
 const texts = require('./texts');
 const steps = require('./steps');
 const {geoOptions, trafficOptions} = require("./helpers/data");
@@ -30,13 +30,6 @@ const session = new LocalSession({
     storage: LocalSession.storageFileSync,
 });
 bot.use(session.middleware());
-
-// Session logging (kept commented out, as in original)
-// bot.use(async (ctx, next) => {
-//     console.log('Session before middleware:', JSON.stringify(ctx.session));
-//     await next();
-//     console.log('Session after middleware:', JSON.stringify(ctx.session));
-// });
 
 // Initialize Express
 const app = express();
@@ -69,7 +62,7 @@ handleSendUserName({bot, steps, texts, errorHandler});
 handleTextProcessor({bot, texts, steps, htmlEscaping, generateMultiButtons, trafficOptions, errorHandler});
 handleSelectionOfTrafficSources({bot, generateMultiButtons, geoOptions, steps, texts, trafficOptions, errorHandler});
 handleGeoSelection({bot, texts, steps, htmlEscaping, geoOptions, generateMultiButtons, errorHandler});
-handleConfirmation({bot, texts, steps, saveToFirebase, errorHandler});
+handleConfirmation({bot, texts, steps, saveToPostgres, errorHandler});
 handleEdit({bot, steps, texts, errorHandler});
 
 // Start HTTP server
